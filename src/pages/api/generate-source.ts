@@ -3,6 +3,7 @@ import Archiver from 'archiver'
 import { stripIndent } from 'common-tags'
 import getTemplateData from '../../lib/templates'
 import { FormValues } from '../../types'
+import { basename, join } from 'path'
 
 export default async function handler(
   req: NextApiRequest,
@@ -37,8 +38,16 @@ function generateSourceCode(formData: FormValues) {
   zip.append(prettyDoc, { name: 'resume.tex' })
   zip.append(readme, { name: 'README.md' })
 
-  if (opts.inputs) {
-    zip.directory(opts.inputs, '../')
+  for (const input of opts.inputs || []) {
+    zip.file(join(process.cwd(), 'public', input.slice(1)), {
+      name: basename(input)
+    })
+  }
+
+  for (const font of opts.fonts || []) {
+    zip.file(join(process.cwd(), 'public', font.slice(1)), {
+      name: join('fonts', basename(font))
+    })
   }
 
   zip.finalize()
