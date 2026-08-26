@@ -13,54 +13,71 @@ export default async function latex(texDoc: string, opts: LaTeXOpts) {
       xetex.loadEngine(),
       dvipdfmx.loadEngine()
     ])
-    engineLoaded = true
+    await Promise.all([
+      pdftex.setTexliveEndpoint('/api/texlive/pdftex/'),
+      xetex.setTexliveEndpoint('/api/texlive/xetex/'),
+      dvipdfmx.setTexliveEndpoint('/api/texlive/xetex/')
+    ])
 
     await pdftex.makeMemFSFolder('fonts/')
     await xetex.makeMemFSFolder('fonts/')
     await dvipdfmx.makeMemFSFolder('fonts/')
+    engineLoaded = true
   }
 
-  const fonts = await resolveAssets(opts.fonts || [])
-  const inputs = await resolveAssets(opts.inputs || [])
+  try {
+    const fonts = await resolveAssets(opts.fonts || [])
+    const inputs = await resolveAssets(opts.inputs || [])
 
-  switch (opts.cmd) {
-    case 'pdflatex': {
-      for (const [name, content] of fonts) {
-        await pdftex.writeMemFSFile(`fonts/${name}`, content)
-      }
-
-      for (const [name, content] of inputs) {
-        await pdftex.writeMemFSFile(name, content)
-      }
-
-      await pdftex.writeMemFSFile('main.tex', texDoc)
-      await pdftex.setEngineMainFile('main.tex')
-      const { pdf } = await pdftex.compileLaTeX()
-
-      return URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
-    }
-    case 'xelatex': {
-      for (const engine of [xetex, dvipdfmx]) {
+    switch (opts.cmd) {
+      case 'pdflatex': {
         for (const [name, content] of fonts) {
-          await engine.writeMemFSFile(`fonts/${name}`, content)
+          await pdftex.writeMemFSFile(`fonts/${name}`, content)
         }
+
+        for (const [name, content] of inputs) {
+          await pdftex.writeMemFSFile(name, content)
+        }
+
+        await pdftex.writeMemFSFile('main.tex', texDoc)
+        await pdftex.setEngineMainFile('main.tex')
+        const { pdf } = await pdftex.compileLaTeX()
+
+        return URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
       }
+      case 'xelatex': {
+        for (const engine of [xetex, dvipdfmx]) {
+          for (const [name, content] of fonts) {
+            await engine.writeMemFSFile(`fonts/${name}`, content)
+          }
+        }
 
-      for (const [name, content] of inputs) {
-        await xetex.writeMemFSFile(name, content)
+        for (const [name, content] of inputs) {
+          await xetex.writeMemFSFile(name, content)
+        }
+
+        await xetex.writeMemFSFile('main.tex', texDoc)
+        await xetex.setEngineMainFile('main.tex')
+        const res = await xetex.compileLaTeX()
+
+        await dvipdfmx.writeMemFSFile('main.xdv', res.pdf)
+        await dvipdfmx.setEngineMainFile('main.xdv')
+        const { pdf } = await dvipdfmx.compilePDF()
+
+        return URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
       }
-
-      await xetex.writeMemFSFile('main.tex', texDoc)
-      await xetex.setEngineMainFile('main.tex')
-      const res = await xetex.compileLaTeX()
-
-      await dvipdfmx.writeMemFSFile('main.xdv', res.pdf)
-      await dvipdfmx.setEngineMainFile('main.xdv')
-      const { pdf } = await dvipdfmx.compilePDF()
-
-      return URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }))
     }
+  } catch (error) {
+    resetEngines()
+    throw error
   }
+}
+
+function resetEngines() {
+  pdftex.closeWorker()
+  xetex.closeWorker()
+  dvipdfmx.closeWorker()
+  engineLoaded = false
 }
 
 async function resolveAssets(urls: string[]) {

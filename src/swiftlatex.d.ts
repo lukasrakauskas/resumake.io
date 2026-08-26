@@ -1,7 +1,9 @@
 declare module 'swiftlatex' {
   class LaTeXEngine {
     loadEngine(): Promise<void>
+    closeWorker(): void
     makeMemFSFolder(folder: string): Promise<void>
+    setTexliveEndpoint(url: string): Promise<void>
     writeMemFSFile(
       filename: string,
       content: ArrayBuffer | Uint8Array | string

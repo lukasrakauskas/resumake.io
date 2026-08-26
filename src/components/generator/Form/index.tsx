@@ -55,6 +55,8 @@ export function Form() {
   }, [formContext])
 
   const handleFormSubmit = useCallback(async () => {
+    if (resume.isLoading) return
+
     const formValues = formContext.getValues()
     setResume({ ...resume, isLoading: true })
     try {
